@@ -232,7 +232,10 @@ def check_all_pairs(
                     "drug_a": a,
                     "drug_b": b,
                     "severity": None,
-                    "description": "We don't have enough information to check this combination. To stay safe, please ask your doctor or pharmacist.",
+                    "description": (
+                        "We don't have enough information to check this combination. "
+                        "To stay safe, please ask your doctor or pharmacist."
+                    ),
                     "source": "Drug Interaction Dataset",
                     "found": False,
                 }

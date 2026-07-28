@@ -16,3 +16,4 @@ env/
 .streamlit/secrets.toml
 *.log
 .cache/
+data/cache/

@@ -159,7 +159,14 @@ BRAND_ALIASES = {
     "vitaminc": "ascorbic acid",
     "ascorbic acid": "ascorbic acid",
     "ascorbate": "ascorbic acid",
-    "vitamin d": "vitamin d",
+    # Interaction CSV uses chemical names, not "Vitamin D"
+    "vitamin d": "cholecalciferol",
+    "vit d": "cholecalciferol",
+    "vitd": "cholecalciferol",
     "vitamin d3": "cholecalciferol",
+    "vit d3": "cholecalciferol",
+    "vitamin d2": "ergocalciferol",
+    "vit d2": "ergocalciferol",
     "cholecalciferol": "cholecalciferol",
+    "ergocalciferol": "ergocalciferol",
 }

@@ -19,20 +19,24 @@ if str(ROOT) not in sys.path:
 # Force-reload local modules so matcher fixes apply without a full Python restart
 import importlib
 import src.preprocessing as _preprocessing
+import src.brand_aliases as _brand_aliases
 import src.medication_matcher as _medication_matcher
 import src.data_loader as _data_loader
 import src.interaction_checker as _interaction_checker
 import src.interaction_explainer as _interaction_explainer
 import src.medicine_details as _medicine_details
 import src.risk_scoring as _risk_scoring
+import src.schedule as _schedule
 
 importlib.reload(_preprocessing)
+importlib.reload(_brand_aliases)
 importlib.reload(_medication_matcher)
 importlib.reload(_data_loader)
 importlib.reload(_interaction_checker)
 importlib.reload(_interaction_explainer)
 importlib.reload(_medicine_details)
 importlib.reload(_risk_scoring)
+importlib.reload(_schedule)
 
 from src.data_loader import build_unique_drug_list, load_datasets
 from src.interaction_checker import check_all_pairs, generate_medication_pairs
@@ -49,6 +53,14 @@ from src.medication_matcher import (
 from src.medicine_details import get_medicine_details
 from src.preprocessing import normalize_drug_name, parse_medication_input
 from src.risk_scoring import calculate_overall_risk
+from src.schedule import (
+    DAYS as SCHED_DAYS,
+    SLOTS as SCHED_SLOTS,
+    build_weekly_grid_html,
+    entry_summary,
+    normalize_schedule_entry,
+    schedule_count_label,
+)
 
 DATA_DIR = ROOT / "data"
 DEFAULT_INTERACTIONS = DATA_DIR / "drug_interactions.csv"
@@ -221,6 +233,161 @@ section.main,
     padding: 0.35rem 0.8rem;
     font-size: 0.88rem;
     font-weight: 700;
+}
+
+.sched-invite {
+    margin: 0.85rem 0 0.35rem 0;
+    padding: 1.05rem 1.15rem;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(204,251,241,0.65), rgba(255,247,237,0.75));
+    border: 1px solid rgba(13,148,136,0.18);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+}
+.sched-invite strong {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.15rem;
+    color: #102a2e;
+    display: block;
+    margin-bottom: 0.2rem;
+}
+.sched-invite p {
+    margin: 0;
+    color: #4d6a70;
+    font-size: 0.95rem;
+    line-height: 1.4;
+    max-width: 36rem;
+}
+.sched-dialog-hero {
+    background: linear-gradient(135deg, #0f766e 0%, #0d9488 55%, #ea580c 140%);
+    color: #fff;
+    border-radius: 18px;
+    padding: 1.1rem 1.2rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 12px 28px rgba(15,118,110,0.25);
+}
+.sched-dialog-hero h3 {
+    font-family: "Fraunces", Georgia, serif !important;
+    margin: 0 0 0.35rem 0 !important;
+    font-size: 1.45rem !important;
+    color: #fff !important;
+}
+.sched-dialog-hero p {
+    margin: 0;
+    opacity: 0.95;
+    line-height: 1.45;
+    font-size: 0.95rem;
+}
+.sched-entry {
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(16,42,46,0.08);
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    margin: 0.45rem 0;
+    box-shadow: 0 6px 16px rgba(16,42,46,0.04);
+}
+.sched-entry strong {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 1.05rem;
+    color: var(--ink);
+}
+.sched-entry .meta {
+    color: #4d6a70;
+    font-size: 0.88rem;
+    margin-top: 0.2rem;
+    line-height: 1.4;
+}
+.sched-wrap {
+    overflow-x: auto;
+    margin-top: 0.75rem;
+    border-radius: 18px;
+    border: 1px solid rgba(16,42,46,0.08);
+    background: rgba(255,255,255,0.72);
+}
+.sched-week-label {
+    padding: 0.75rem 0.9rem 0.35rem 0.9rem;
+    font-weight: 800;
+    color: #0f766e;
+    font-size: 0.92rem;
+}
+.sched-day-head {
+    background: rgba(204,251,241,0.55);
+    color: #115e59;
+    font-weight: 800;
+    text-align: center !important;
+}
+.sched-day-name {
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+}
+.sched-day-date {
+    font-family: "Fraunces", Georgia, serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    margin-top: 0.15rem;
+    color: #102a2e;
+}
+.sched-today-tag {
+    display: inline-block;
+    margin-top: 0.25rem;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    background: #0d9488;
+    color: #fff;
+    border-radius: 999px;
+    padding: 0.12rem 0.4rem;
+}
+.sched-day-head.is-today,
+.sched-cell.is-today {
+    background: rgba(204,251,241,0.85);
+}
+.sched-grid {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+    font-size: 0.82rem;
+}
+.sched-grid th,
+.sched-grid td {
+    border: 1px solid rgba(16,42,46,0.07);
+    padding: 0.55rem 0.45rem;
+    vertical-align: top;
+    text-align: left;
+}
+.sched-grid thead th {
+    background: rgba(204,251,241,0.55);
+    color: #115e59;
+    font-weight: 800;
+    text-align: center;
+    font-size: 0.78rem;
+    letter-spacing: 0.02em;
+}
+.sched-slot {
+    background: rgba(240,253,250,0.9);
+    color: #0f766e;
+    font-weight: 800;
+    white-space: nowrap;
+    width: 5.5rem;
+}
+.sched-corner { background: rgba(240,253,250,0.9); width: 5.5rem; }
+.sched-cell { min-height: 2.4rem; }
+.sched-empty { background: rgba(248,250,252,0.5); }
+.sched-pill {
+    display: inline-block;
+    background: linear-gradient(180deg, #ffffff, #ecfdf5);
+    border: 1px solid rgba(13,148,136,0.22);
+    color: #0f766e;
+    border-radius: 999px;
+    padding: 0.18rem 0.55rem;
+    margin: 0.12rem 0.15rem 0.12rem 0;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.3;
 }
 
 .metric-grid {
@@ -669,7 +836,6 @@ div.stButton > button[kind="secondary"] {
 }
 /* Invisible click overlays on metric cards — must come AFTER secondary pill styles */
 .st-key-filter_found,
-.st-key-filter_all,
 .st-key-filter_major,
 .st-key-filter_moderate {
     margin-top: -124px !important;
@@ -679,15 +845,12 @@ div.stButton > button[kind="secondary"] {
     z-index: 6 !important;
 }
 .st-key-filter_found div.stButton,
-.st-key-filter_all div.stButton,
 .st-key-filter_major div.stButton,
 .st-key-filter_moderate div.stButton {
     height: 124px !important;
 }
 .st-key-filter_found div.stButton > button,
 .st-key-filter_found div.stButton > button[kind="secondary"],
-.st-key-filter_all div.stButton > button,
-.st-key-filter_all div.stButton > button[kind="secondary"],
 .st-key-filter_major div.stButton > button,
 .st-key-filter_major div.stButton > button[kind="secondary"],
 .st-key-filter_moderate div.stButton > button,
@@ -923,23 +1086,20 @@ def display_label(name: str, mapping: dict) -> str:
 
 
 def render_risk(risk: dict):
-    titles = {
-        "grey": "Not enough information",
-        "green": "Not enough information",
-        "yellow": "Moderate attention needed",
-        "red": "High-risk combination",
-    }
+    """Use scorer title/message; map level → color."""
     css = {
         "grey": "risk-grey",
         "green": "risk-grey",
         "yellow": "risk-yellow",
         "red": "risk-red",
     }.get(risk["level"], "risk-yellow")
+    title = html.escape(str(risk.get("title") or "Outcome"))
+    message = html.escape(str(risk.get("message") or ""))
     st.markdown(
         f"""
         <div class="risk {css}">
-            <h3>{titles.get(risk['level'], risk['title'])}</h3>
-            <p>{risk['message']}</p>
+            <h3>{title}</h3>
+            <p>{message}</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -998,7 +1158,6 @@ def render_pair_results(results: dict):
         unsafe_allow_html=True,
     )
     all_pairs = results.get("all_pairs") or []
-    found = results["found"]
 
     def _pair_matches_filter(item: dict) -> bool:
         if pair_filter == "all":
@@ -1014,12 +1173,12 @@ def render_pair_results(results: dict):
 
     if not all_pairs:
         st.markdown(
-            '<div class="info-soft">Nice — no interaction showed up for this combination in our dataset. Still check with a doctor or pharmacist if you are unsure.</div>',
+            '<div class="info-soft">No pairs to show for this check.</div>',
             unsafe_allow_html=True,
         )
     elif not visible:
         st.markdown(
-            '<div class="info-soft">No pairs in this filter. Tap <strong>Pairs checked</strong> to see everything again.</div>',
+            '<div class="info-soft">No pairs in this filter. Tap the active card again to see everything.</div>',
             unsafe_allow_html=True,
         )
     else:
@@ -1047,7 +1206,10 @@ def render_pair_results(results: dict):
                 desc = html.escape(
                     str(
                         item.get("description")
-                        or "We don't have enough information to check this combination. To stay safe, please ask your doctor or pharmacist."
+                        or (
+                            "We don't have enough information to check this combination. "
+                            "To stay safe, please ask your doctor or pharmacist."
+                        )
                     )
                 )
                 original_html = ""
@@ -1068,10 +1230,6 @@ def render_pair_results(results: dict):
                     f"</div>"
                 ),
                 unsafe_allow_html=True,
-            )
-        if any(i.get("severity_source") == "keyword-inferred" for i in found):
-            st.caption(
-                "Severity is inferred from interaction text when the dataset has no severity column."
             )
         if any(i.get("plain_description") for i in found):
             model = results.get("gemini_model") or "Gemini Flash"
@@ -1098,7 +1256,6 @@ def render_outcome_interactive(results: dict):
         """
         <style>
         .st-key-filter_found,
-        .st-key-filter_all,
         .st-key-filter_major,
         .st-key-filter_moderate {
             margin-top: -124px !important;
@@ -1108,11 +1265,9 @@ def render_outcome_interactive(results: dict):
             z-index: 6 !important;
         }
         .st-key-filter_found button,
-        .st-key-filter_all button,
         .st-key-filter_major button,
         .st-key-filter_moderate button,
         .st-key-filter_found button[kind="secondary"],
-        .st-key-filter_all button[kind="secondary"],
         .st-key-filter_major button[kind="secondary"],
         .st-key-filter_moderate button[kind="secondary"] {
             opacity: 0 !important;
@@ -1134,18 +1289,16 @@ def render_outcome_interactive(results: dict):
 
     cards = [
         ("found", "m1", "Interactions", risk["num_interactions"], "Detected pairs"),
-        ("all", "m2", "Pairs checked", risk["num_pairs"], "Unique combinations"),
         ("major", "m3", "Major", risk["num_major"], "High severity"),
         ("moderate", "m4", "Moderate", risk["num_moderate"], "Monitor closely"),
     ]
     key_for = {
         "found": "filter_found",
-        "all": "filter_all",
         "major": "filter_major",
         "moderate": "filter_moderate",
     }
 
-    cols = st.columns(4)
+    cols = st.columns(3)
     for col, (filt, mcls, title, value, hint) in zip(cols, cards):
         with col:
             st.markdown(
@@ -1243,6 +1396,114 @@ def medicine_details_dialog() -> None:
     render_medicine_details(results)
 
 
+def _close_schedule_dialog() -> None:
+    st.session_state.show_schedule_dialog = False
+
+
+@st.dialog("Medication schedule", width="large", on_dismiss=_close_schedule_dialog)
+def medication_schedule_dialog() -> None:
+    """Popup editor + weekly overview for the patient schedule."""
+    patient = (st.session_state.get("patient_name") or "there").strip() or "there"
+    schedule = st.session_state.get("med_schedule") or []
+    parsed_names, _ = parse_medication_input(st.session_state.get("med_textarea") or "")
+    med_choices = list(dict.fromkeys(parsed_names))
+
+    st.markdown(
+        f"""
+        <div class="sched-dialog-hero">
+          <h3>Plan your week, {html.escape(patient)}</h3>
+          <p>Choose days and times for each medicine. Your plan stays on this device until you clear it.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.caption(schedule_count_label(schedule))
+
+    with st.form("schedule_add_form", clear_on_submit=True):
+        c_med, c_note = st.columns([1.4, 1])
+        with c_med:
+            if med_choices:
+                picked = st.selectbox(
+                    "Medicine from your list",
+                    options=["— type a name below —"] + med_choices,
+                )
+                custom = st.text_input(
+                    "Or type another medicine",
+                    placeholder="e.g. Metformin",
+                )
+                medicine_name = (custom or "").strip()
+                if not medicine_name and picked and not picked.startswith("—"):
+                    medicine_name = picked
+            else:
+                medicine_name = st.text_input(
+                    "Medicine name",
+                    placeholder="Add medicines in the list above first, or type a name here",
+                )
+        with c_note:
+            note = st.text_input("Note (optional)", placeholder="With food, before bed…")
+
+        day_preset = st.radio(
+            "Quick days",
+            options=["Every day", "Weekdays", "Custom"],
+            horizontal=True,
+            label_visibility="collapsed",
+        )
+        default_days = SCHED_DAYS
+        if day_preset == "Weekdays":
+            default_days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+        dcol, scol = st.columns(2)
+        with dcol:
+            days = st.multiselect(
+                "Days",
+                options=SCHED_DAYS,
+                default=default_days if day_preset != "Custom" else [],
+            )
+        with scol:
+            slots = st.multiselect(
+                "Times of day",
+                options=SCHED_SLOTS,
+                default=["Morning"],
+            )
+        submitted = st.form_submit_button("Add to schedule", type="primary", use_container_width=True)
+
+    if submitted:
+        entry = normalize_schedule_entry(medicine_name, days, slots, note)
+        if entry is None:
+            st.warning("Choose a medicine, at least one day, and at least one time.")
+        else:
+            st.session_state.med_schedule.append(entry)
+            st.session_state.show_schedule_dialog = True
+            st.rerun()
+
+    schedule = st.session_state.get("med_schedule") or []
+    if schedule:
+        st.markdown("##### Your medicines")
+        for idx, entry in enumerate(schedule):
+            left, right = st.columns([5.2, 0.95])
+            with left:
+                st.markdown(
+                    (
+                        f'<div class="sched-entry">'
+                        f"<div><strong>{html.escape(entry['medicine'])}</strong>"
+                        f'<div class="meta">{html.escape(entry_summary(entry))}</div></div>'
+                        f"</div>"
+                    ),
+                    unsafe_allow_html=True,
+                )
+            with right:
+                if st.button("Remove", key=f"sched_rm_{idx}", use_container_width=True):
+                    st.session_state.med_schedule.pop(idx)
+                    st.session_state.show_schedule_dialog = True
+                    st.rerun()
+
+        st.markdown("##### This week at a glance")
+        st.caption("Dates update automatically for the current week.")
+        st.markdown(build_weekly_grid_html(schedule), unsafe_allow_html=True)
+    else:
+        st.info("Nothing scheduled yet — add your first medicine above.")
+
+
 # ---------------------------------------------------------------------------
 # Data
 # ---------------------------------------------------------------------------
@@ -1261,6 +1522,10 @@ if model is not None and drug_names:
 
 if "med_textarea" not in st.session_state:
     st.session_state.med_textarea = ""
+if "med_schedule" not in st.session_state:
+    st.session_state.med_schedule = []
+if "show_schedule_dialog" not in st.session_state:
+    st.session_state.show_schedule_dialog = False
 
 # ---------------------------------------------------------------------------
 # Hero
@@ -1307,10 +1572,44 @@ with b1:
 with b2:
     clear = st.button("Clear", use_container_width=True)
 
+# Invite to schedule (opens popup)
+_sched = st.session_state.get("med_schedule") or []
+_sched_n = len(_sched)
+_invite_title = (
+    "Want to schedule your medications?"
+    if _sched_n == 0
+    else "Your medication schedule"
+)
+_invite_body = (
+    "Set the days and times for each medicine, then see your week at a glance."
+    if _sched_n == 0
+    else f"{schedule_count_label(_sched)}. Open to view or edit your plan."
+)
+_btn_label = "Schedule medications" if _sched_n == 0 else "Open schedule"
+
+st.markdown(
+    f"""
+    <div class="sched-invite">
+      <div>
+        <strong>{html.escape(_invite_title)}</strong>
+        <p>{html.escape(_invite_body)}</p>
+      </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+if st.button(_btn_label, key="open_schedule_dialog", use_container_width=True):
+    st.session_state.show_schedule_dialog = True
+
+if st.session_state.get("show_schedule_dialog"):
+    medication_schedule_dialog()
+
 if clear:
     st.session_state.med_textarea = ""
     st.session_state.pop("results", None)
     st.session_state.pair_filter = "all"
+    st.session_state.med_schedule = []
+    st.session_state.show_schedule_dialog = False
     try:
         st.query_params.clear()
     except Exception:
@@ -1577,61 +1876,6 @@ if results:
     )
     render_risk(results["risk"])
     render_outcome_interactive(results)
-
-    st.markdown(
-        '<p class="section-eyebrow">AI matching</p><p class="section-title">How names were recognized</p>',
-        unsafe_allow_html=True,
-    )
-    for r in results["reviewed"]:
-        if r["method"] != "Exact match" and r.get("matched"):
-            generic = r.get("generic_name") or ""
-            generic_line = f"Generic: {generic}" if generic else ""
-            conf = f"{r['confidence'] * 100:.0f}%"
-            try:
-                st.html(
-                    f"""
-                    <div class="match">
-                      <div><strong>Entered</strong> · {html.escape(r['entered'])}</div>
-                      <div style="color:#0d9488;font-weight:800;margin:0.2rem 0;">↓</div>
-                      <div><strong>Matched</strong> · {html.escape(str(r.get('display_name') or r['matched']))}</div>
-                      {"<div style='color:#4d6a70;margin-top:0.25rem;'>" + html.escape(generic_line) + "</div>" if generic_line else ""}
-                      <div style="margin-top:0.5rem;">
-                        Confidence <span class="conf">{conf}</span>
-                        <span style="color:#4d6a70;margin-left:0.4rem;">{html.escape(r['method'])}</span>
-                      </div>
-                    </div>
-                    """
-                )
-            except Exception:
-                st.markdown(
-                    f"**Entered:** {r['entered']}  \n"
-                    f"**Matched:** {r.get('display_name') or r['matched']}  \n"
-                    + (f"**Generic:** {generic}  \n" if generic else "")
-                    + f"**Confidence:** {conf} · {r['method']}"
-                )
-    table = pd.DataFrame(
-        [
-            {
-                "Entered": r["entered"],
-                "Matched": (
-                    f"{r.get('final_display') or r.get('display_name') or r.get('matched')}"
-                    + (
-                        f" ({r['generic_name']})"
-                        if r.get("generic_name")
-                        and normalize_drug_name(r["generic_name"])
-                        != normalize_drug_name(
-                            str(r.get("final_display") or r.get("display_name") or "")
-                        )
-                        else ""
-                    )
-                ),
-                "Method": r["method"],
-                "Confidence": f"{r['confidence']*100:.0f}%",
-            }
-            for r in results["reviewed"]
-        ]
-    )
-    st.dataframe(table, use_container_width=True, hide_index=True)
 
 st.markdown(
     """

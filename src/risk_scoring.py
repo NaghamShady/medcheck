@@ -72,22 +72,21 @@ def calculate_overall_risk(
         )
     elif max_level >= 3 or counts["major"] > 0:
         level = "red"
-        title = "🔴 High Risk"
+        title = "High-risk combination"
         message = (
-            "At least one major, severe, or contraindicated interaction was detected. "
+            "At least one major interaction was detected. "
             "Consult a healthcare professional before combining these medications."
         )
     elif max_level >= 2 or counts["moderate"] > 0:
         level = "yellow"
-        title = "🟡 Moderate Risk"
+        title = "Moderate attention needed"
         message = (
             "At least one moderate interaction was detected, with no major interactions found. "
             "Discuss this combination with a doctor or pharmacist."
         )
     else:
-        # Only minor / unknown
         level = "yellow"
-        title = "🟡 Moderate Risk"
+        title = "Moderate attention needed"
         message = (
             "Minor or unclassified interactions were detected. "
             "Review the details below and consult a healthcare professional if unsure."

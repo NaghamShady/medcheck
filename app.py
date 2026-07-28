@@ -22,6 +22,7 @@ import src.preprocessing as _preprocessing
 import src.medication_matcher as _medication_matcher
 import src.data_loader as _data_loader
 import src.interaction_checker as _interaction_checker
+import src.interaction_explainer as _interaction_explainer
 import src.medicine_details as _medicine_details
 import src.risk_scoring as _risk_scoring
 
@@ -29,11 +30,17 @@ importlib.reload(_preprocessing)
 importlib.reload(_medication_matcher)
 importlib.reload(_data_loader)
 importlib.reload(_interaction_checker)
+importlib.reload(_interaction_explainer)
 importlib.reload(_medicine_details)
 importlib.reload(_risk_scoring)
 
 from src.data_loader import build_unique_drug_list, load_datasets
 from src.interaction_checker import check_all_pairs, generate_medication_pairs
+from src.interaction_explainer import (
+    get_gemini_api_key,
+    get_gemini_model_name,
+    simplify_interaction_description,
+)
 from src.medication_matcher import (
     create_drug_embeddings,
     load_embedding_model,
@@ -881,6 +888,25 @@ def load_app_data():
     return cached_load_from_disk(inter_mtime, med_mtime)
 
 
+@st.cache_data(show_spinner=False)
+def explain_interaction_cached(
+    drug_a: str,
+    drug_b: str,
+    severity: str,
+    description: str,
+    api_key: str,
+    model_name: str,
+):
+    return simplify_interaction_description(
+        drug_a=drug_a,
+        drug_b=drug_b,
+        severity=severity,
+        description=description,
+        api_key=api_key,
+        model_name=model_name,
+    )
+
+
 def badge(severity: str) -> str:
     t = (severity or "").lower()
     if any(k in t for k in ["major", "severe", "high", "contraindic"]):
@@ -1003,7 +1029,17 @@ def render_pair_results(results: dict):
             if item.get("found", True) and item.get("severity") is not None:
                 src = "Inferred" if item.get("severity_source") == "keyword-inferred" else "Dataset"
                 sev = badge(item["severity"])
-                desc = html.escape(str(item.get("description") or ""))
+                plain_desc = item.get("plain_description") or item.get("description") or ""
+                desc = html.escape(str(plain_desc))
+                original_desc = html.escape(str(item.get("description") or ""))
+                original_html = (
+                    f'<p style="margin:0.35rem 0 0 0;color:#4d6a70 !important;line-height:1.35;font-size:0.88rem;">'
+                    f"Dataset wording: {original_desc}</p>"
+                    if item.get("plain_description")
+                    and original_desc
+                    and str(item.get("plain_description")).strip() != str(item.get("description")).strip()
+                    else ""
+                )
                 card_cls = "ix-card"
             else:
                 src = ""
@@ -1014,6 +1050,7 @@ def render_pair_results(results: dict):
                         or "We don't have enough information to check this combination. To stay safe, please ask your doctor or pharmacist."
                     )
                 )
+                original_html = ""
                 card_cls = "ix-card ix-none"
             src_html = (
                 f'<span style="margin-left:0.5rem;color:#4d6a70;font-size:0.85rem;">{src}</span>'
@@ -1027,6 +1064,7 @@ def render_pair_results(results: dict):
                     f"{sev}"
                     f"{src_html}"
                     f'<p style="margin:0.55rem 0 0 0;color:#102a2e !important;line-height:1.45;">{desc}</p>'
+                    f"{original_html}"
                     f"</div>"
                 ),
                 unsafe_allow_html=True,
@@ -1034,6 +1072,14 @@ def render_pair_results(results: dict):
         if any(i.get("severity_source") == "keyword-inferred" for i in found):
             st.caption(
                 "Severity is inferred from interaction text when the dataset has no severity column."
+            )
+        if any(i.get("plain_description") for i in found):
+            model = results.get("gemini_model") or "Gemini Flash"
+            st.caption(f"Plain-language summaries generated with {model}.")
+        elif found and results.get("explanation_errors"):
+            st.caption(
+                "Plain-language summaries are unavailable, so original dataset wording is shown. "
+                + " ".join(str(e) for e in results["explanation_errors"])
             )
 
 
@@ -1389,6 +1435,54 @@ if check:
         for item in found + all_pairs:
             item["drug_a_display"] = display_label(item["drug_a"], lookup_to_display)
             item["drug_b_display"] = display_label(item["drug_b"], lookup_to_display)
+        gemini_api_key = get_gemini_api_key(st.secrets)
+        gemini_model = get_gemini_model_name(st.secrets)
+        explanation_errors = []
+        if gemini_api_key and found:
+            for item in found:
+                plain_text, error = explain_interaction_cached(
+                    str(item.get("drug_a_display") or item.get("drug_a") or ""),
+                    str(item.get("drug_b_display") or item.get("drug_b") or ""),
+                    str(item.get("severity") or ""),
+                    str(item.get("description") or ""),
+                    gemini_api_key,
+                    gemini_model,
+                )
+                print(error)
+                if plain_text:
+                    item["plain_description"] = plain_text
+                    item["plain_description_source"] = gemini_model
+                elif error:
+                    explanation_errors.append(error)
+        elif found:
+            explanation_errors.append("Gemini API key is not configured.")
+
+        plain_by_pair = {}
+        for item in found:
+            if item.get("plain_description"):
+                key = tuple(
+                    sorted(
+                        [
+                            normalize_drug_name(str(item.get("drug_a") or "")),
+                            normalize_drug_name(str(item.get("drug_b") or "")),
+                        ]
+                    )
+                )
+                plain_by_pair[key] = {
+                    "plain_description": item["plain_description"],
+                    "plain_description_source": item.get("plain_description_source", gemini_model),
+                }
+        for item in all_pairs:
+            key = tuple(
+                sorted(
+                    [
+                        normalize_drug_name(str(item.get("drug_a") or "")),
+                        normalize_drug_name(str(item.get("drug_b") or "")),
+                    ]
+                )
+            )
+            if key in plain_by_pair:
+                item.update(plain_by_pair[key])
         risk = calculate_overall_risk(found, len(unique), len(pairs))
 
         details_blocks = []
@@ -1412,6 +1506,8 @@ if check:
             "all_pairs": all_pairs,
             "risk": risk,
             "details": details_blocks,
+            "gemini_model": gemini_model,
+            "explanation_errors": sorted(set(explanation_errors))[:2],
         }
 
 results = st.session_state.get("results")

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import html
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -58,11 +59,16 @@ from src.medicine_details import get_medicine_details
 from src.preprocessing import normalize_drug_name, parse_medication_input
 from src.risk_scoring import calculate_overall_risk
 from src.schedule import (
-    DAYS as SCHED_DAYS,
+    DEFAULT_ROUTINE,
+    SLOT_LABELS,
     SLOTS as SCHED_SLOTS,
-    build_weekly_grid_html,
+    build_daily_timeline_html,
     entry_summary,
+    format_time_12h,
+    half_hour_options,
+    normalize_routine,
     normalize_schedule_entry,
+    routine_is_set,
     schedule_count_label,
 )
 
@@ -318,76 +324,93 @@ section.main,
     border: 1px solid rgba(16,42,46,0.08);
     background: rgba(255,255,255,0.72);
 }
-.sched-week-label {
+.sched-day-label {
     padding: 0.75rem 0.9rem 0.35rem 0.9rem;
     font-weight: 800;
     color: #0f766e;
     font-size: 0.92rem;
 }
-.sched-day-head {
-    background: rgba(204,251,241,0.55);
-    color: #115e59;
-    font-weight: 800;
-    text-align: center !important;
+.sched-routine-card {
+    background: rgba(255,255,255,0.88);
+    border: 1px solid rgba(16,42,46,0.08);
+    border-radius: 16px;
+    padding: 0.85rem 1rem;
+    margin: 0.35rem 0 0.85rem 0;
 }
-.sched-day-name {
-    font-size: 0.78rem;
-    letter-spacing: 0.02em;
+.sched-routine-card .hint {
+    color: #4d6a70;
+    font-size: 0.88rem;
+    margin: 0 0 0.55rem 0;
+    line-height: 1.4;
 }
-.sched-day-date {
+.sched-timeline {
+    padding: 0.35rem 0.9rem 1rem 0.9rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.sched-timeline-row {
+    display: grid;
+    grid-template-columns: 6.2rem 1.1rem 1fr;
+    gap: 0.55rem;
+    align-items: start;
+    min-height: 3.4rem;
+    position: relative;
+}
+.sched-timeline-row:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    left: calc(6.2rem + 0.55rem + 0.4rem);
+    top: 1.15rem;
+    bottom: -0.15rem;
+    width: 2px;
+    background: rgba(13,148,136,0.22);
+}
+.sched-timeline-time {
+    text-align: right;
+    padding-top: 0.15rem;
+}
+.sched-timeline-clock {
     font-family: "Fraunces", Georgia, serif;
-    font-size: 0.95rem;
     font-weight: 700;
-    margin-top: 0.15rem;
+    font-size: 0.95rem;
     color: #102a2e;
 }
-.sched-today-tag {
-    display: inline-block;
-    margin-top: 0.25rem;
-    font-size: 0.65rem;
+.sched-timeline-anchor {
+    font-size: 0.72rem;
     font-weight: 800;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.03em;
     text-transform: uppercase;
-    background: #0d9488;
-    color: #fff;
-    border-radius: 999px;
-    padding: 0.12rem 0.4rem;
-}
-.sched-day-head.is-today,
-.sched-cell.is-today {
-    background: rgba(204,251,241,0.85);
-}
-.sched-grid {
-    width: 100%;
-    border-collapse: collapse;
-    min-width: 640px;
-    font-size: 0.82rem;
-}
-.sched-grid th,
-.sched-grid td {
-    border: 1px solid rgba(16,42,46,0.07);
-    padding: 0.55rem 0.45rem;
-    vertical-align: top;
-    text-align: left;
-}
-.sched-grid thead th {
-    background: rgba(204,251,241,0.55);
-    color: #115e59;
-    font-weight: 800;
-    text-align: center;
-    font-size: 0.78rem;
-    letter-spacing: 0.02em;
-}
-.sched-slot {
-    background: rgba(240,253,250,0.9);
     color: #0f766e;
-    font-weight: 800;
-    white-space: nowrap;
-    width: 5.5rem;
+    margin-top: 0.1rem;
 }
-.sched-corner { background: rgba(240,253,250,0.9); width: 5.5rem; }
-.sched-cell { min-height: 2.4rem; }
-.sched-empty { background: rgba(248,250,252,0.5); }
+.sched-timeline-dot {
+    width: 0.85rem;
+    height: 0.85rem;
+    border-radius: 50%;
+    background: #0d9488;
+    border: 2px solid #fff;
+    box-shadow: 0 0 0 2px rgba(13,148,136,0.35);
+    margin-top: 0.35rem;
+    z-index: 1;
+}
+.sched-timeline-row.is-empty .sched-timeline-dot {
+    background: #94a3b8;
+    box-shadow: 0 0 0 2px rgba(148,163,184,0.35);
+}
+.sched-timeline-body {
+    padding: 0.15rem 0 0.85rem 0;
+}
+.sched-timeline-empty {
+    color: #94a3b8;
+    font-size: 0.85rem;
+    padding-top: 0.2rem;
+}
+.sched-timeline-meds {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+}
 .sched-pill {
     display: inline-block;
     background: linear-gradient(180deg, #ffffff, #ecfdf5);
@@ -399,6 +422,14 @@ section.main,
     font-size: 0.75rem;
     font-weight: 700;
     line-height: 1.3;
+}
+@media (max-width: 640px) {
+    .sched-timeline-row {
+        grid-template-columns: 4.8rem 0.95rem 1fr;
+    }
+    .sched-timeline-row:not(:last-child)::before {
+        left: calc(4.8rem + 0.55rem + 0.32rem);
+    }
 }
 
 .metric-grid {
@@ -1446,79 +1477,134 @@ def _close_schedule_dialog() -> None:
     st.session_state.show_schedule_dialog = False
 
 
+def _parse_time_input(label: str, default_hhmm: str, key: str):
+    """Streamlit time_input helper that seeds from HH:MM strings."""
+    try:
+        default = datetime.strptime(default_hhmm, "%H:%M").time()
+    except Exception:
+        default = datetime.strptime("08:00", "%H:%M").time()
+    return st.time_input(label, value=default, key=key)
+
+
 @st.dialog("Medication schedule", width="large", on_dismiss=_close_schedule_dialog)
 def medication_schedule_dialog() -> None:
-    """Popup editor + weekly overview for the patient schedule."""
+    """Popup: personal daily routine + per-medicine timing + daily timeline."""
     patient = (st.session_state.get("patient_name") or "there").strip() or "there"
     schedule = st.session_state.get("med_schedule") or []
+    routine = normalize_routine(st.session_state.get("daily_routine"))
     parsed_names, _ = parse_medication_input(st.session_state.get("med_textarea") or "")
     med_choices = list(dict.fromkeys(parsed_names))
 
     st.markdown(
         f"""
         <div class="sched-dialog-hero">
-          <h3>Plan your week, {html.escape(patient)}</h3>
-          <p>Choose days and times for each medicine. Your plan stays on this device until you clear it.</p>
+          <h3>Plan your day, {html.escape(patient)}</h3>
+          <p>Tell us when you wake, eat, and sleep — then place each medicine on your personal daily timeline.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
+
+    st.markdown("##### Your daily routine")
+    st.caption("Times are personal — not everyone wakes or eats at the same hour.")
+    with st.form("daily_routine_form"):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            wake = _parse_time_input("Wake up", routine["wake"], "routine_wake")
+        with c2:
+            breakfast = _parse_time_input("Breakfast", routine["breakfast"], "routine_breakfast")
+        with c3:
+            lunch = _parse_time_input("Lunch", routine["lunch"], "routine_lunch")
+        with c4:
+            dinner = _parse_time_input("Dinner", routine["dinner"], "routine_dinner")
+        with c5:
+            sleep = _parse_time_input("Bedtime / sleep", routine["sleep"], "routine_sleep")
+        save_routine = st.form_submit_button("Save my routine", type="secondary", use_container_width=True)
+
+    if save_routine:
+        st.session_state.daily_routine = normalize_routine(
+            {
+                "wake": wake,
+                "breakfast": breakfast,
+                "lunch": lunch,
+                "dinner": dinner,
+                "sleep": sleep,
+            }
+        )
+        st.session_state.show_schedule_dialog = True
+        st.rerun()
+
+    routine = normalize_routine(st.session_state.get("daily_routine"))
+    if routine_is_set(st.session_state.get("daily_routine")):
+        chips = " · ".join(
+            f"{SLOT_LABELS[s]} {format_time_12h(routine[s])}" for s in SCHED_SLOTS
+        )
+        st.caption(f"Saved routine: {chips}")
+    else:
+        st.info("Save your wake / meal / sleep times first so the schedule can match your day.")
+
+    st.markdown("##### Add a medicine")
     st.caption(schedule_count_label(schedule))
 
     with st.form("schedule_add_form", clear_on_submit=True):
-        c_med, c_note = st.columns([1.4, 1])
-        with c_med:
-            if med_choices:
-                picked = st.selectbox(
-                    "Medicine from your list",
-                    options=["— type a name below —"] + med_choices,
-                )
-                custom = st.text_input(
-                    "Or type another medicine",
-                    placeholder="e.g. Metformin",
-                )
-                medicine_name = (custom or "").strip()
-                if not medicine_name and picked and not picked.startswith("—"):
-                    medicine_name = picked
-            else:
-                medicine_name = st.text_input(
-                    "Medicine name",
-                    placeholder="Add medicines in the list above first, or type a name here",
-                )
-        with c_note:
-            note = st.text_input("Note (optional)", placeholder="With food, before bed…")
+        medicine_names: list[str] = []
+        if med_choices:
+            picked = st.multiselect(
+                "Medicines from your list",
+                options=med_choices,
+                help="Select one or more medicines to schedule at the same times.",
+            )
+            medicine_names.extend([m.strip() for m in picked if (m or "").strip()])
+            custom = st.text_input(
+                "Or type another medicine",
+                placeholder="e.g. Metformin",
+            )
+            extra = (custom or "").strip()
+            if extra and extra not in medicine_names:
+                medicine_names.append(extra)
+        else:
+            custom = st.text_input(
+                "Medicine name",
+                placeholder="Add medicines in the list above first, or type a name here",
+            )
+            extra = (custom or "").strip()
+            if extra:
+                medicine_names.append(extra)
 
-        day_preset = st.radio(
-            "Quick days",
-            options=["Every day", "Weekdays", "Custom"],
-            horizontal=True,
-            label_visibility="collapsed",
+        st.markdown("**When do you take it?** (select one or more)")
+        slot_cols = st.columns(len(SCHED_SLOTS))
+        slots = []
+        for i, slot_key in enumerate(SCHED_SLOTS):
+            with slot_cols[i]:
+                if st.checkbox(
+                    f"{SLOT_LABELS[slot_key]}\n{format_time_12h(routine[slot_key])}",
+                    value=False,
+                ):
+                    slots.append(slot_key)
+
+        time_labels = [f"{format_time_12h(t)} ({t})" for t in half_hour_options()]
+        label_to_hhmm = {f"{format_time_12h(t)} ({t})": t for t in half_hour_options()}
+        custom_pick = st.selectbox(
+            "Or pick any other time in the day",
+            options=["— none —"] + time_labels,
+            help="Use this if the medicine doesn’t fit wake / meals / bedtime.",
         )
-        default_days = SCHED_DAYS
-        if day_preset == "Weekdays":
-            default_days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+        custom_times = []
+        if custom_pick and custom_pick != "— none —":
+            custom_times = [label_to_hhmm[custom_pick]]
 
-        dcol, scol = st.columns(2)
-        with dcol:
-            days = st.multiselect(
-                "Days",
-                options=SCHED_DAYS,
-                default=default_days if day_preset != "Custom" else [],
-            )
-        with scol:
-            slots = st.multiselect(
-                "Times of day",
-                options=SCHED_SLOTS,
-                default=["Morning"],
-            )
-        submitted = st.form_submit_button("Add to schedule", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("Add to daily plan", type="primary", use_container_width=True)
 
     if submitted:
-        entry = normalize_schedule_entry(medicine_name, days, slots, note)
-        if entry is None:
-            st.warning("Choose a medicine, at least one day, and at least one time.")
+        added = 0
+        for medicine_name in medicine_names:
+            entry = normalize_schedule_entry(medicine_name, slots, custom_times)
+            if entry is not None:
+                st.session_state.med_schedule.append(entry)
+                added += 1
+        if added == 0:
+            st.warning("Choose at least one medicine and at least one time (routine checkbox or custom time).")
         else:
-            st.session_state.med_schedule.append(entry)
             st.session_state.show_schedule_dialog = True
             st.rerun()
 
@@ -1532,7 +1618,7 @@ def medication_schedule_dialog() -> None:
                     (
                         f'<div class="sched-entry">'
                         f"<div><strong>{html.escape(entry['medicine'])}</strong>"
-                        f'<div class="meta">{html.escape(entry_summary(entry))}</div></div>'
+                        f'<div class="meta">{html.escape(entry_summary(entry, routine))}</div></div>'
                         f"</div>"
                     ),
                     unsafe_allow_html=True,
@@ -1543,9 +1629,9 @@ def medication_schedule_dialog() -> None:
                     st.session_state.show_schedule_dialog = True
                     st.rerun()
 
-        st.markdown("##### This week at a glance")
-        st.caption("Dates update automatically for the current week.")
-        st.markdown(build_weekly_grid_html(schedule), unsafe_allow_html=True)
+        st.markdown("##### Your day at a glance")
+        st.caption("A daily timeline using your personal wake, meal, and sleep times.")
+        st.markdown(build_daily_timeline_html(schedule, routine), unsafe_allow_html=True)
     else:
         st.info("Nothing scheduled yet — add your first medicine above.")
 
@@ -1570,6 +1656,8 @@ if "med_textarea" not in st.session_state:
     st.session_state.med_textarea = ""
 if "med_schedule" not in st.session_state:
     st.session_state.med_schedule = []
+if "daily_routine" not in st.session_state:
+    st.session_state.daily_routine = dict(DEFAULT_ROUTINE)
 if "show_schedule_dialog" not in st.session_state:
     st.session_state.show_schedule_dialog = False
 
@@ -1674,10 +1762,10 @@ _sched_n = len(_sched)
 _invite_title = (
     "Want to schedule your medications?"
     if _sched_n == 0
-    else "Your medication schedule"
+    else "Your daily medication plan"
 )
 _invite_body = (
-    "Set the days and times for each medicine, then see your week at a glance."
+    "Tell us when you wake, eat, and sleep — then place each medicine on your day."
     if _sched_n == 0
     else f"{schedule_count_label(_sched)}. Open to view or edit your plan."
 )
@@ -1705,6 +1793,9 @@ if clear:
     st.session_state.pop("results", None)
     st.session_state.pair_filter = "all"
     st.session_state.med_schedule = []
+    st.session_state.daily_routine = dict(DEFAULT_ROUTINE)
+    for _k in ("routine_wake", "routine_breakfast", "routine_lunch", "routine_dinner", "routine_sleep"):
+        st.session_state.pop(_k, None)
     st.session_state.show_schedule_dialog = False
     try:
         st.query_params.clear()

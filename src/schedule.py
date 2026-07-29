@@ -1,98 +1,145 @@
-"""Patient medication schedule helpers (days + time slots)."""
+"""Patient medication schedule helpers (daily routine + time anchors)."""
 
 from __future__ import annotations
 
 import html
-from datetime import date, datetime, timedelta
+import re
+from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-SLOTS = ["Morning", "Noon", "Evening", "Night"]
+# Anchors tied to the patient's personal day
+SLOTS = ["wake", "breakfast", "lunch", "dinner", "sleep"]
 
-DAY_LABELS = {
-    "Mon": "Mon",
-    "Tue": "Tue",
-    "Wed": "Wed",
-    "Thu": "Thu",
-    "Fri": "Fri",
-    "Sat": "Sat",
-    "Sun": "Sun",
+SLOT_LABELS = {
+    "wake": "Wake up",
+    "breakfast": "Breakfast",
+    "lunch": "Lunch",
+    "dinner": "Dinner",
+    "sleep": "Bedtime / sleep",
 }
 
+DEFAULT_ROUTINE: Dict[str, str] = {
+    "wake": "07:00",
+    "breakfast": "08:00",
+    "lunch": "13:00",
+    "dinner": "19:00",
+    "sleep": "22:30",
+}
 
-def week_monday(ref: Optional[date] = None) -> date:
-    """Return Monday of the week containing ``ref`` (defaults to today)."""
-    today = ref or date.today()
-    return today - timedelta(days=today.weekday())  # Monday=0
-
-
-def week_dates(ref: Optional[date] = None) -> List[Tuple[str, date]]:
-    """Return [(day_key, date), ...] for Mon–Sun of the week."""
-    start = week_monday(ref)
-    return [(DAYS[i], start + timedelta(days=i)) for i in range(7)]
+_TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 
 
-def format_week_range(ref: Optional[date] = None) -> str:
-    """Human-readable week span, e.g. 'Mon 28 Jul – Sun 3 Aug 2026'."""
-    days = week_dates(ref)
-    start = days[0][1]
-    end = days[-1][1]
-
-    def _short(d: date, with_year: bool = False) -> str:
-        base = f"{d.strftime('%a')} {d.day} {d.strftime('%b')}"
-        return f"{base} {d.year}" if with_year else base
-
-    if start.month == end.month and start.year == end.year:
-        return f"{start.strftime('%a')} {start.day} – {end.strftime('%a')} {end.day} {end.strftime('%b %Y')}"
-    if start.year == end.year:
-        return f"{_short(start)} – {_short(end)} {end.year}"
-    return f"{_short(start, True)} – {_short(end, True)}"
+def half_hour_options() -> List[str]:
+    """HH:MM values every 30 minutes for a full day."""
+    opts: List[str] = []
+    for hour in range(24):
+        for minute in (0, 30):
+            opts.append(f"{hour:02d}:{minute:02d}")
+    return opts
 
 
-def _fmt_day_header(day_key: str, d: date, today: date) -> str:
-    is_today = d == today
-    cls = "sched-day-head is-today" if is_today else "sched-day-head"
-    # %-d is POSIX; on Windows use %#d — use day without zero-pad portably
-    day_num = str(d.day)
-    month = d.strftime("%b")
-    today_tag = '<span class="sched-today-tag">Today</span>' if is_today else ""
-    return (
-        f'<th scope="col" class="{cls}">'
-        f'<div class="sched-day-name">{html.escape(DAY_LABELS[day_key])}</div>'
-        f'<div class="sched-day-date">{html.escape(day_num)} {html.escape(month)}</div>'
-        f"{today_tag}"
-        f"</th>"
-    )
+def normalize_time(value: Any) -> Optional[str]:
+    """Accept HH:MM strings (or datetime.time) and return HH:MM, or None."""
+    if value is None:
+        return None
+    if hasattr(value, "hour") and hasattr(value, "minute"):
+        try:
+            return f"{int(value.hour):02d}:{int(value.minute):02d}"
+        except Exception:
+            return None
+    text = str(value).strip()
+    if not text:
+        return None
+    m = _TIME_RE.match(text)
+    if not m:
+        return None
+    return f"{int(m.group(1)):02d}:{m.group(2)}"
+
+
+def format_time_12h(hhmm: str) -> str:
+    """Format HH:MM as a short 12-hour label, e.g. 7:00 AM."""
+    t = normalize_time(hhmm)
+    if not t:
+        return str(hhmm or "")
+    hour, minute = map(int, t.split(":"))
+    suffix = "AM" if hour < 12 else "PM"
+    h12 = hour % 12 or 12
+    return f"{h12}:{minute:02d} {suffix}"
+
+
+def normalize_routine(raw: Optional[Dict[str, Any]] = None) -> Dict[str, str]:
+    """Merge user routine with defaults; always returns all five slots."""
+    base = dict(DEFAULT_ROUTINE)
+    if not raw:
+        return base
+    for key in SLOTS:
+        cleaned = normalize_time(raw.get(key))
+        if cleaned:
+            base[key] = cleaned
+    return base
+
+
+def routine_is_set(raw: Optional[Dict[str, Any]]) -> bool:
+    """True when the patient has saved a full daily routine."""
+    if not raw or not isinstance(raw, dict):
+        return False
+    return all(normalize_time(raw.get(k)) for k in SLOTS)
+
+
+def slot_label(slot: str, routine: Optional[Dict[str, Any]] = None) -> str:
+    """Human label with optional clock time, e.g. 'Breakfast · 8:00 AM'."""
+    name = SLOT_LABELS.get(slot, slot.title())
+    times = normalize_routine(routine)
+    clock = times.get(slot)
+    if clock:
+        return f"{name} · {format_time_12h(clock)}"
+    return name
+
+
+def normalize_custom_times(values: Sequence[Any]) -> List[str]:
+    """Deduplicate and sort valid custom HH:MM times."""
+    seen = set()
+    out: List[str] = []
+    for value in values or []:
+        cleaned = normalize_time(value)
+        if cleaned and cleaned not in seen:
+            seen.add(cleaned)
+            out.append(cleaned)
+    out.sort()
+    return out
 
 
 def normalize_schedule_entry(
     medicine: str,
-    days: Sequence[str],
     slots: Sequence[str],
-    note: str = "",
+    custom_times: Optional[Sequence[Any]] = None,
 ) -> Optional[Dict[str, Any]]:
-    """Build a validated schedule entry, or None if incomplete."""
+    """Build a validated daily schedule entry, or None if incomplete."""
     med = (medicine or "").strip()
     if not med:
         return None
-    clean_days = [d for d in DAYS if d in set(days or [])]
     clean_slots = [s for s in SLOTS if s in set(slots or [])]
-    if not clean_days or not clean_slots:
+    clean_custom = normalize_custom_times(custom_times or [])
+    if not clean_slots and not clean_custom:
         return None
     return {
         "medicine": med,
-        "days": clean_days,
         "slots": clean_slots,
-        "note": (note or "").strip()[:120],
+        "custom_times": clean_custom,
     }
 
 
-def entry_summary(entry: Dict[str, Any]) -> str:
-    days = ", ".join(entry.get("days") or [])
-    slots = ", ".join(entry.get("slots") or [])
-    note = entry.get("note") or ""
-    base = f"{days} · {slots}"
-    return f"{base} — {note}" if note else base
+def entry_summary(
+    entry: Dict[str, Any],
+    routine: Optional[Dict[str, Any]] = None,
+) -> str:
+    parts: List[str] = []
+    for s in entry.get("slots") or []:
+        if s in SLOT_LABELS:
+            parts.append(slot_label(s, routine))
+    for t in normalize_custom_times(entry.get("custom_times") or []):
+        parts.append(f"Custom · {format_time_12h(t)}")
+    return " · ".join(parts) if parts else "No times set"
 
 
 def schedule_count_label(schedule: List[Dict[str, Any]]) -> str:
@@ -100,60 +147,102 @@ def schedule_count_label(schedule: List[Dict[str, Any]]) -> str:
     if n == 0:
         return "No medicines scheduled yet"
     if n == 1:
-        return "1 medicine on your schedule"
-    return f"{n} medicines on your schedule"
+        return "1 medicine on your daily plan"
+    return f"{n} medicines on your daily plan"
 
 
-def build_weekly_grid_html(
+def _today_label_portable(ref: Optional[date] = None) -> str:
+    d = ref or date.today()
+    return f"{d.strftime('%A')}, {d.day} {d.strftime('%b %Y')}"
+
+
+def _timeline_events(
     schedule: List[Dict[str, Any]],
-    ref: Optional[date] = None,
-) -> str:
+    routine: Dict[str, str],
+) -> List[Tuple[str, str, List[str]]]:
     """
-    Render a Mon–Sun × Morning–Night overview grid with calendar dates.
+    Build (hhmm, anchor_label, meds) rows sorted by clock time.
 
-    Uses the week containing ``ref`` (defaults to today).
+    Routine anchors always appear (even if empty). Custom times only appear
+    when at least one medicine uses them.
     """
-    today = date.today()
-    dated_days = week_dates(ref)
-    range_label = format_week_range(ref)
+    # key = (hhmm, label) -> meds
+    bucket: Dict[Tuple[str, str], List[str]] = {}
+    order: List[Tuple[str, str]] = []
 
-    # cell[(day, slot)] -> ordered unique medicine names
-    cell: Dict[tuple, List[str]] = {}
+    def _add(hhmm: str, label: str, med: Optional[str] = None, force: bool = False) -> None:
+        key = (hhmm, label)
+        if key not in bucket:
+            bucket[key] = []
+            order.append(key)
+        elif force and key not in order:
+            order.append(key)
+        if med and med not in bucket[key]:
+            bucket[key].append(med)
+
+    for slot in SLOTS:
+        _add(routine[slot], SLOT_LABELS[slot], force=True)
+
     for entry in schedule or []:
         med = html.escape(str(entry.get("medicine") or ""))
         if not med:
             continue
-        for day in entry.get("days") or []:
-            if day not in DAYS:
+        for slot in entry.get("slots") or []:
+            if slot not in SLOT_LABELS:
                 continue
-            for slot in entry.get("slots") or []:
-                if slot not in SLOTS:
-                    continue
-                key = (day, slot)
-                names = cell.setdefault(key, [])
-                if med not in names:
-                    names.append(med)
+            _add(routine[slot], SLOT_LABELS[slot], med)
+        for t in normalize_custom_times(entry.get("custom_times") or []):
+            _add(t, "Custom time", med)
 
-    head = "".join(_fmt_day_header(day_key, d, today) for day_key, d in dated_days)
+    # Sort: by time, then routine anchors before custom at same minute
+    def _sort_key(item: Tuple[str, str]) -> Tuple[str, int]:
+        hhmm, label = item
+        return (hhmm, 1 if label == "Custom time" else 0)
+
+    ordered = sorted(order, key=_sort_key)
+    return [(hhmm, label, bucket[(hhmm, label)]) for hhmm, label in ordered]
+
+
+def build_daily_timeline_html(
+    schedule: List[Dict[str, Any]],
+    routine: Optional[Dict[str, Any]] = None,
+    ref: Optional[date] = None,
+) -> str:
+    """
+    Render a vertical daily timeline with routine anchors and any custom times.
+    """
+    times = normalize_routine(routine)
+    day_label = _today_label_portable(ref)
+    events = _timeline_events(schedule, times)
+
     rows = []
-    for slot in SLOTS:
-        cells = [f'<th scope="row" class="sched-slot">{html.escape(slot)}</th>']
-        for day_key, d in dated_days:
-            meds = cell.get((day_key, slot), [])
-            today_cls = " is-today" if d == today else ""
-            if meds:
-                pills = "".join(f'<span class="sched-pill">{m}</span>' for m in meds)
-                cells.append(f'<td class="sched-cell{today_cls}">{pills}</td>')
-            else:
-                cells.append(f'<td class="sched-cell sched-empty{today_cls}"></td>')
-        rows.append("<tr>" + "".join(cells) + "</tr>")
+    for hhmm, label, meds in events:
+        clock = html.escape(format_time_12h(hhmm))
+        name = html.escape(label)
+        if meds:
+            pills = "".join(f'<span class="sched-pill">{m}</span>' for m in meds)
+            body = f'<div class="sched-timeline-meds">{pills}</div>'
+            empty_cls = ""
+        else:
+            body = '<div class="sched-timeline-empty">Nothing scheduled</div>'
+            empty_cls = " is-empty"
+
+        rows.append(
+            f'<div class="sched-timeline-row{empty_cls}">'
+            f'<div class="sched-timeline-time">'
+            f'<div class="sched-timeline-clock">{clock}</div>'
+            f'<div class="sched-timeline-anchor">{name}</div>'
+            f"</div>"
+            f'<div class="sched-timeline-dot" aria-hidden="true"></div>'
+            f'<div class="sched-timeline-body">{body}</div>'
+            f"</div>"
+        )
 
     return (
         '<div class="sched-wrap">'
-        f'<div class="sched-week-label">Week of {html.escape(range_label)}</div>'
-        '<table class="sched-grid" role="grid" aria-label="Weekly medicine schedule">'
-        f'<thead><tr><th scope="col" class="sched-corner"></th>{head}</tr></thead>'
-        f"<tbody>{''.join(rows)}</tbody>"
-        "</table>"
+        f'<div class="sched-day-label">Today · {html.escape(day_label)}</div>'
+        '<div class="sched-timeline" role="list" aria-label="Daily medicine schedule">'
+        f"{''.join(rows)}"
+        "</div>"
         "</div>"
     )

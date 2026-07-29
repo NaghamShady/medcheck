@@ -1202,6 +1202,7 @@ def render_pair_results(results: dict):
         f'<p class="section-title">{title_map.get(pair_filter, "All pairs checked")}</p>',
         unsafe_allow_html=True,
     )
+    found_interactions = results.get("found") or []
     all_pairs = results.get("all_pairs") or []
 
     def _pair_matches_filter(item: dict) -> bool:
@@ -1238,7 +1239,7 @@ def render_pair_results(results: dict):
                 original_desc = html.escape(str(item.get("description") or ""))
                 original_html = (
                     f'<p style="margin:0.35rem 0 0 0;color:#4d6a70 !important;line-height:1.35;font-size:0.88rem;">'
-                    f"Dataset wording: {original_desc}</p>"
+                    f"Scientific Reason: {original_desc}</p>"
                     if item.get("plain_description")
                     and original_desc
                     and str(item.get("plain_description")).strip() != str(item.get("description")).strip()
@@ -1276,10 +1277,10 @@ def render_pair_results(results: dict):
                 ),
                 unsafe_allow_html=True,
             )
-        if any(i.get("plain_description") for i in found):
+        if any(i.get("plain_description") for i in found_interactions):
             model = results.get("openrouter_model") or "OpenRouter"
             st.caption(f"Plain-language summaries generated with {model}.")
-        elif found and results.get("explanation_errors"):
+        elif found_interactions and results.get("explanation_errors"):
             st.caption(
                 "Plain-language summaries are unavailable, so original dataset wording is shown. "
                 + " ".join(str(e) for e in results["explanation_errors"])

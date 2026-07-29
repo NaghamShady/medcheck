@@ -15,6 +15,7 @@ Educational medical AI prototype for a short workshop. Enter two or more medicat
   - RapidFuzz spelling fallback
   - MiniLM semantic embeddings (`sentence-transformers/all-MiniLM-L6-v2`)
   - Combined scoring with a configurable confidence threshold (default **0.75**)
+- Optional photo upload for extracting medication names into the input field
 - Pairwise interaction checks (order-independent)
 - Dataset severity labels or keyword-inferred severity (clearly marked)
 - Overall risk levels: Green / Yellow / Red
@@ -104,12 +105,13 @@ Or in `.streamlit/secrets.toml`:
 ```toml
 OPENROUTER_API_KEY = "your_api_key_here"
 OPENROUTER_MODEL = "openrouter/auto"
+OPENROUTER_VISION_MODEL = "openai/gpt-4o-mini"
 # Optional attribution headers for OpenRouter
 OPENROUTER_SITE_URL = "https://your-site.example"
 OPENROUTER_APP_NAME = "MedCheck"
 ```
 
-`OPENROUTER_MODEL` is optional and defaults to `openrouter/auto`. If no API key is configured, the app falls back to the original dataset wording.
+`OPENROUTER_MODEL` is optional and defaults to `openrouter/auto`. `OPENROUTER_VISION_MODEL` is optional and defaults to `openai/gpt-4o-mini` for medication-photo extraction. If no API key is configured, the app falls back to the original dataset wording and photo extraction is unavailable.
 
 ---
 

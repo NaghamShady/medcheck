@@ -41,9 +41,11 @@ importlib.reload(_schedule)
 from src.data_loader import build_unique_drug_list, load_datasets
 from src.interaction_checker import check_all_pairs, generate_medication_pairs
 from src.interaction_explainer import (
+    extract_medication_names_from_images,
     get_openrouter_api_key,
     get_openrouter_app_name,
     get_openrouter_model_name,
+    get_openrouter_vision_model_name,
     get_openrouter_site_url,
     simplify_interaction_description,
 )
@@ -70,6 +72,8 @@ DEFAULT_MEDICINES = DATA_DIR / "medicine_details.csv"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 THRESHOLD = 0.75
 EXPLAINER_CACHE_VERSION = "openrouter-complete-sentence-v1"
+MAX_MEDICATION_PHOTOS = 5
+MEDICATION_PHOTO_TYPES = ["png", "jpg", "jpeg", "webp", "gif"]
 
 st.set_page_config(
     page_title="MedCheck",
@@ -1083,6 +1087,34 @@ def explain_interaction_cached(
     )
 
 
+def merge_medication_names(existing_text: str, names: list[str]) -> str:
+    existing_names, _ = parse_medication_input(existing_text or "")
+    merged = [name for name in existing_names if name]
+    seen = {normalize_drug_name(name) for name in merged}
+
+    for name in names:
+        clean_name = " ".join(str(name).strip().split())
+        key = normalize_drug_name(clean_name)
+        if clean_name and key and key not in seen:
+            merged.append(clean_name)
+            seen.add(key)
+
+    return "\n".join(merged)
+
+
+def uploaded_image_content_type(filename: str, fallback: str) -> str:
+    if fallback:
+        return fallback
+    suffix = Path(filename or "").suffix.lower()
+    return {
+        ".gif": "image/gif",
+        ".jpeg": "image/jpeg",
+        ".jpg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }.get(suffix, "")
+
+
 def badge(severity: str) -> str:
     t = (severity or "").lower()
     if any(k in t for k in ["major", "severe", "high", "contraindic"]):
@@ -1572,6 +1604,56 @@ st.markdown(
     '<p class="section-eyebrow">Start here</p><p class="section-title">Your medication list</p>',
     unsafe_allow_html=True,
 )
+
+uploaded_med_photos = st.file_uploader(
+    "Upload medication photos",
+    type=MEDICATION_PHOTO_TYPES,
+    accept_multiple_files=True,
+    key="med_photo_uploads",
+)
+photo_b1, photo_b2, _ = st.columns([1.55, 0.9, 2])
+with photo_b1:
+    extract_from_photos = st.button(
+        "Extract names from photos",
+        use_container_width=True,
+        disabled=not uploaded_med_photos,
+    )
+with photo_b2:
+    st.caption(f"Max {MAX_MEDICATION_PHOTOS} photos")
+
+if extract_from_photos:
+    if len(uploaded_med_photos) > MAX_MEDICATION_PHOTOS:
+        st.error(f"Please upload no more than {MAX_MEDICATION_PHOTOS} photos.")
+    else:
+        openrouter_api_key = get_openrouter_api_key(st.secrets)
+        openrouter_vision_model = get_openrouter_vision_model_name(st.secrets)
+        openrouter_site_url = get_openrouter_site_url(st.secrets)
+        openrouter_app_name = get_openrouter_app_name(st.secrets)
+        images = [
+            (uploaded_image_content_type(photo.name, photo.type), photo.getvalue())
+            for photo in uploaded_med_photos
+        ]
+        with st.spinner("Reading medication names from photos..."):
+            extracted_names, extraction_error = extract_medication_names_from_images(
+                images=images,
+                api_key=openrouter_api_key,
+                model_name=openrouter_vision_model,
+                site_url=openrouter_site_url,
+                app_name=openrouter_app_name,
+            )
+        if extracted_names:
+            st.session_state.med_textarea = merge_medication_names(
+                st.session_state.med_textarea,
+                extracted_names,
+            )
+            st.session_state.pop("results", None)
+            st.success(
+                "Added from photos: "
+                + ", ".join(extracted_names)
+            )
+        elif extraction_error:
+            st.error(extraction_error)
+
 st.text_area(
     "Medications",
     height=150,

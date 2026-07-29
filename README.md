@@ -18,7 +18,7 @@ Educational medical AI prototype for a short workshop. Enter two or more medicat
 - Pairwise interaction checks (order-independent)
 - Dataset severity labels or keyword-inferred severity (clearly marked)
 - Overall risk levels: Green / Yellow / Red
-- Gemini Flash rewrites of interaction descriptions into short plain-English summaries
+- OpenRouter rewrites of interaction descriptions into short plain-English summaries
 - Medicine details: generic/salt, uses, side effects, substitutes
 - Graceful fallback if the embedding model cannot download
 - Optional Plotly severity chart
@@ -89,24 +89,27 @@ pip install -r requirements.txt
 
 The first run may download `sentence-transformers/all-MiniLM-L6-v2` (internet required once). If download fails, MedCheck continues with exact + RapidFuzz matching only.
 
-### Gemini Flash setup
+### OpenRouter setup
 
-MedCheck can use Gemini Flash to rewrite technical interaction sentences for non-medical users.
+MedCheck can use OpenRouter to rewrite technical interaction sentences for non-medical users.
 
 Set your API key in either environment variables:
 
 ```bash
-set GEMINI_API_KEY=your_api_key_here
+set OPENROUTER_API_KEY=your_api_key_here
 ```
 
 Or in `.streamlit/secrets.toml`:
 
 ```toml
-GEMINI_API_KEY = "your_api_key_here"
-GEMINI_MODEL = "gemini-2.0-flash"
+OPENROUTER_API_KEY = "your_api_key_here"
+OPENROUTER_MODEL = "openrouter/auto"
+# Optional attribution headers for OpenRouter
+OPENROUTER_SITE_URL = "https://your-site.example"
+OPENROUTER_APP_NAME = "MedCheck"
 ```
 
-`GEMINI_MODEL` is optional. If no API key is configured, the app falls back to the original dataset wording.
+`OPENROUTER_MODEL` is optional and defaults to `openrouter/auto`. If no API key is configured, the app falls back to the original dataset wording.
 
 ---
 

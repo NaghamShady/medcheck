@@ -41,8 +41,10 @@ importlib.reload(_schedule)
 from src.data_loader import build_unique_drug_list, load_datasets
 from src.interaction_checker import check_all_pairs, generate_medication_pairs
 from src.interaction_explainer import (
-    get_gemini_api_key,
-    get_gemini_model_name,
+    get_openrouter_api_key,
+    get_openrouter_app_name,
+    get_openrouter_model_name,
+    get_openrouter_site_url,
     simplify_interaction_description,
 )
 from src.medication_matcher import (
@@ -67,6 +69,7 @@ DEFAULT_INTERACTIONS = DATA_DIR / "drug_interactions.csv"
 DEFAULT_MEDICINES = DATA_DIR / "medicine_details.csv"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 THRESHOLD = 0.75
+EXPLAINER_CACHE_VERSION = "openrouter-complete-sentence-v1"
 
 st.set_page_config(
     page_title="MedCheck",
@@ -74,6 +77,10 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+if st.session_state.get("explainer_cache_version") != EXPLAINER_CACHE_VERSION:
+    st.session_state.pop("results", None)
+    st.session_state["explainer_cache_version"] = EXPLAINER_CACHE_VERSION
 
 st.markdown(
     """
@@ -1059,7 +1066,11 @@ def explain_interaction_cached(
     description: str,
     api_key: str,
     model_name: str,
+    site_url: str,
+    app_name: str,
+    cache_version: str,
 ):
+    _ = cache_version
     return simplify_interaction_description(
         drug_a=drug_a,
         drug_b=drug_b,
@@ -1067,6 +1078,8 @@ def explain_interaction_cached(
         description=description,
         api_key=api_key,
         model_name=model_name,
+        site_url=site_url,
+        app_name=app_name,
     )
 
 
@@ -1232,7 +1245,7 @@ def render_pair_results(results: dict):
                 unsafe_allow_html=True,
             )
         if any(i.get("plain_description") for i in found):
-            model = results.get("gemini_model") or "Gemini Flash"
+            model = results.get("openrouter_model") or "OpenRouter"
             st.caption(f"Plain-language summaries generated with {model}.")
         elif found and results.get("explanation_errors"):
             st.caption(
@@ -1734,27 +1747,31 @@ if check:
         for item in found + all_pairs:
             item["drug_a_display"] = display_label(item["drug_a"], lookup_to_display)
             item["drug_b_display"] = display_label(item["drug_b"], lookup_to_display)
-        gemini_api_key = get_gemini_api_key(st.secrets)
-        gemini_model = get_gemini_model_name(st.secrets)
+        openrouter_api_key = get_openrouter_api_key(st.secrets)
+        openrouter_model = get_openrouter_model_name(st.secrets)
+        openrouter_site_url = get_openrouter_site_url(st.secrets)
+        openrouter_app_name = get_openrouter_app_name(st.secrets)
         explanation_errors = []
-        if gemini_api_key and found:
+        if openrouter_api_key and found:
             for item in found:
                 plain_text, error = explain_interaction_cached(
                     str(item.get("drug_a_display") or item.get("drug_a") or ""),
                     str(item.get("drug_b_display") or item.get("drug_b") or ""),
                     str(item.get("severity") or ""),
                     str(item.get("description") or ""),
-                    gemini_api_key,
-                    gemini_model,
+                    openrouter_api_key,
+                    openrouter_model,
+                    openrouter_site_url,
+                    openrouter_app_name,
+                    EXPLAINER_CACHE_VERSION,
                 )
-                print(error)
                 if plain_text:
                     item["plain_description"] = plain_text
-                    item["plain_description_source"] = gemini_model
+                    item["plain_description_source"] = openrouter_model
                 elif error:
                     explanation_errors.append(error)
         elif found:
-            explanation_errors.append("Gemini API key is not configured.")
+            explanation_errors.append("OpenRouter API key is not configured.")
 
         plain_by_pair = {}
         for item in found:
@@ -1769,7 +1786,7 @@ if check:
                 )
                 plain_by_pair[key] = {
                     "plain_description": item["plain_description"],
-                    "plain_description_source": item.get("plain_description_source", gemini_model),
+                    "plain_description_source": item.get("plain_description_source", openrouter_model),
                 }
         for item in all_pairs:
             key = tuple(
@@ -1805,7 +1822,7 @@ if check:
             "all_pairs": all_pairs,
             "risk": risk,
             "details": details_blocks,
-            "gemini_model": gemini_model,
+            "openrouter_model": openrouter_model,
             "explanation_errors": sorted(set(explanation_errors))[:2],
         }
 

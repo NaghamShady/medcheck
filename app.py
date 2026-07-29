@@ -72,7 +72,7 @@ DEFAULT_MEDICINES = DATA_DIR / "medicine_details.csv"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 THRESHOLD = 0.75
 EXPLAINER_CACHE_VERSION = "openrouter-complete-sentence-v1"
-MAX_MEDICATION_PHOTOS = 5
+MAX_MEDICATION_PHOTOS = 10
 MEDICATION_PHOTO_TYPES = ["png", "jpg", "jpeg", "webp", "gif"]
 
 st.set_page_config(

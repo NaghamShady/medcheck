@@ -236,7 +236,7 @@ def extract_medication_names_from_images(
     app_name: str = DEFAULT_OPENROUTER_APP_NAME,
 ) -> Tuple[list[str], Optional[str]]:
     """
-    Extract visible medication names from up to five uploaded images.
+    Extract visible medication names from up to ten uploaded images.
 
     Returns (names, error). The caller should leave manual input unchanged when
     names is empty.
@@ -245,8 +245,8 @@ def extract_medication_names_from_images(
         return [], "OpenRouter API key is not configured."
     if not images:
         return [], "Upload at least one photo first."
-    if len(images) > 5:
-        return [], "Please upload no more than 5 photos."
+    if len(images) > 10:
+        return [], "Please upload no more than 10 photos."
 
     content = [
         {

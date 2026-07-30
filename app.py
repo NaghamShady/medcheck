@@ -6,9 +6,19 @@ No sidebar. Pretrained embeddings for name matching only.
 from __future__ import annotations
 
 import html
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
+
+# Fix macOS Python SSL certs before any HTTPS (OpenRouter) calls.
+try:
+    import certifi
+
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+except Exception:
+    pass
 
 import pandas as pd
 import streamlit as st
@@ -77,7 +87,7 @@ DEFAULT_INTERACTIONS = DATA_DIR / "drug_interactions.csv"
 DEFAULT_MEDICINES = DATA_DIR / "medicine_details.csv"
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 THRESHOLD = 0.75
-EXPLAINER_CACHE_VERSION = "openrouter-complete-sentence-v1"
+EXPLAINER_CACHE_VERSION = "openrouter-ssl-certifi-v2"
 MAX_MEDICATION_PHOTOS = 10
 MEDICATION_PHOTO_TYPES = ["png", "jpg", "jpeg", "webp", "gif"]
 

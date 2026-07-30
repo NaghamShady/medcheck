@@ -6,8 +6,19 @@ import base64
 import json
 import os
 import re
+import ssl
 from typing import Optional, Tuple
 from urllib import error, request
+
+try:
+    import certifi
+
+    # Force Python HTTPS calls to use certifi's CA bundle (fixes macOS CERTIFICATE_VERIFY_FAILED).
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+    os.environ.setdefault("REQUESTS_CA_BUNDLE", certifi.where())
+except Exception:
+    certifi = None  # type: ignore
+
 
 OPENROUTER_CHAT_COMPLETIONS_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_OPENROUTER_MODEL = "openrouter/auto"
@@ -167,6 +178,16 @@ def _is_complete_explanation(text: str) -> bool:
     return last_word not in INCOMPLETE_ENDINGS
 
 
+def _ssl_context():
+    """Prefer certifi CA bundle; fall back to default system context."""
+    if certifi is not None:
+        try:
+            return ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            pass
+    return ssl.create_default_context()
+
+
 def _post_openrouter(payload: dict, headers: dict) -> dict:
     encoded_payload = json.dumps(payload).encode("utf-8")
     req = request.Request(
@@ -175,7 +196,7 @@ def _post_openrouter(payload: dict, headers: dict) -> dict:
         headers=headers,
         method="POST",
     )
-    with request.urlopen(req, timeout=30) as response:  # noqa: S310
+    with request.urlopen(req, timeout=30, context=_ssl_context()) as response:  # noqa: S310
         return json.loads(response.read().decode("utf-8"))
 
 

@@ -126,6 +126,20 @@ Open the local URL shown in the terminal (usually `http://localhost:8501`).
 
 ---
 
+## Deploy (Streamlit Community Cloud)
+
+Present MedCheck from any laptop with a public URL:
+
+1. Push `main` to [github.com/NaghamShady/medcheck](https://github.com/NaghamShady/medcheck).
+2. Open [share.streamlit.io](https://share.streamlit.io) and sign in with GitHub.
+3. **Create app** → repository `NaghamShady/medcheck` → branch `main` → main file `app.py`.
+4. Under **Advanced settings → Secrets**, paste values from [`.streamlit/secrets.toml.example`](.streamlit/secrets.toml.example) (use your real `OPENROUTER_API_KEY`).
+5. Deploy and share the `*.streamlit.app` URL.
+
+First boot can take several minutes while `sentence-transformers` downloads MiniLM.
+
+---
+
 ## Pretrained model (no training)
 
 ```python
